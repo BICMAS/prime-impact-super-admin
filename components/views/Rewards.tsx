@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Award,
   Coins,
@@ -8,12 +8,42 @@ import {
   RefreshCw,
   Trophy,
   Loader2,
+  ImagePlus,
 } from "lucide-react";
 import {
   assignCertificateTemplateToHr,
   createCertificateTemplate,
+  type CertificateTheme,
 } from "@/api/certificates";
 import { getUsers } from "@/api/users";
+import {
+  getEconomyRules,
+  updateEconomyRules,
+  type LeaderboardEntry,
+} from "@/api/economy";
+import { printCertificatePreview } from "@/utils/printCertificatePreview";
+
+const THEME_OPTIONS: Array<{
+  id: CertificateTheme;
+  label: string;
+  description: string;
+}> = [
+  {
+    id: "classic",
+    label: "Classic",
+    description: "Ornate borders, warm parchment tones, serif typography",
+  },
+  {
+    id: "modern",
+    label: "Modern",
+    description: "Clean layout with brand accent bar and bold sans-serif type",
+  },
+  {
+    id: "tech",
+    label: "Tech",
+    description: "Structured header band, monospace accents, minimal geometry",
+  },
+];
 
 const Rewards: React.FC = () => {
   const [activeTab, setActiveTab] =
@@ -23,7 +53,13 @@ const Rewards: React.FC = () => {
      Certificate State
   ===================== */
 
-  const [certConfig, setCertConfig] = useState({
+  const [certConfig, setCertConfig] = useState<{
+    theme: CertificateTheme;
+    title: string;
+    signatory: string;
+    signatoryRole: string;
+    showDate: boolean;
+  }>({
     theme: "classic",
     title: "Certificate of Completion",
     signatory: "Dr. John Smith",
@@ -33,9 +69,11 @@ const Rewards: React.FC = () => {
 
   const [certLoading, setCertLoading] = useState(false);
   const [certError, setCertError] = useState<string | null>(null);
-  const [certificateUrl, setCertificateUrl] = useState<string | null>(null);
-  const [templateFile, setTemplateFile] = useState<File | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
+  const [savedLogoUrl, setSavedLogoUrl] = useState<string | null>(null);
   const [templateDescription, setTemplateDescription] = useState("");
+  const previewRef = useRef<HTMLDivElement>(null);
   const [templateId, setTemplateId] = useState("");
   const [orgId, setOrgId] = useState("");
   const [hrManagerId, setHrManagerId] = useState("");
@@ -45,7 +83,8 @@ const Rewards: React.FC = () => {
   const [assignLoading, setAssignLoading] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
   const [assignSuccess, setAssignSuccess] = useState<string | null>(null);
-  const [showUploadedPdfPreview, setShowUploadedPdfPreview] = useState(false);
+
+  const activeLogoUrl = logoPreviewUrl || savedLogoUrl;
 
   /* =====================
      Coins State (unchanged)
@@ -58,6 +97,12 @@ const Rewards: React.FC = () => {
     dailyStreak: 5,
     enableLeaderboard: true,
   });
+  const [totalCirculating, setTotalCirculating] = useState(0);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [economyLoading, setEconomyLoading] = useState(false);
+  const [economySaving, setEconomySaving] = useState(false);
+  const [economyError, setEconomyError] = useState<string | null>(null);
+  const [economySuccess, setEconomySuccess] = useState<string | null>(null);
 
   /* =====================
      Certificate Actions
@@ -85,21 +130,77 @@ const Rewards: React.FC = () => {
     loadHrManagers();
   }, []);
 
+  useEffect(() => {
+    if (!logoFile) {
+      setLogoPreviewUrl(null);
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(logoFile);
+    setLogoPreviewUrl(objectUrl);
+
+    return () => {
+      URL.revokeObjectURL(objectUrl);
+    };
+  }, [logoFile]);
+
+  useEffect(() => {
+    const loadEconomy = async () => {
+      setEconomyLoading(true);
+      setEconomyError(null);
+      try {
+        const data = await getEconomyRules();
+        setCoinRules(data.rules);
+        setTotalCirculating(data.totalCirculating);
+        setLeaderboard(data.leaderboard);
+      } catch (error) {
+        setEconomyError(
+          error instanceof Error ? error.message : "Failed to load economy rules",
+        );
+      } finally {
+        setEconomyLoading(false);
+      }
+    };
+
+    loadEconomy();
+  }, []);
+
+  const handleUpdateEconomy = async () => {
+    setEconomySaving(true);
+    setEconomyError(null);
+    setEconomySuccess(null);
+
+    try {
+      const data = await updateEconomyRules(coinRules);
+      setCoinRules(data.rules);
+      setTotalCirculating(data.totalCirculating);
+      setLeaderboard(data.leaderboard);
+      setEconomySuccess("Economy rules updated successfully.");
+    } catch (error) {
+      setEconomyError(
+        error instanceof Error ? error.message : "Failed to update economy rules",
+      );
+    } finally {
+      setEconomySaving(false);
+    }
+  };
+
   const handleSaveCertificate = async () => {
     setCertLoading(true);
     setCertError(null);
     setAssignSuccess(null);
 
     try {
-      if (!templateFile) {
-        throw new Error("Please upload a PDF template first");
+      if (!logoFile) {
+        throw new Error("Please upload an organization logo first");
       }
 
       const json = await createCertificateTemplate(
-        templateFile,
-        templateDescription || undefined
+        logoFile,
+        certConfig,
+        templateDescription || undefined,
       );
-      setCertificateUrl(json.url);
+      setSavedLogoUrl(json.url);
       setTemplateId(json.id);
     } catch (err) {
       console.error(err);
@@ -133,7 +234,12 @@ const Rewards: React.FC = () => {
         hrManagerId: hrManagerId.trim(),
       });
 
-      setAssignSuccess(response.message);
+      const reissueNote =
+        typeof response.reissuedCount === "number" && response.reissuedCount > 0
+          ? ` ${response.reissuedCount} existing certificate(s) were updated.`
+          : "";
+
+      setAssignSuccess(`${response.message}${reissueNote}`);
     } catch (err) {
       setAssignError(
         err instanceof Error ? err.message : "Failed to assign template"
@@ -143,9 +249,187 @@ const Rewards: React.FC = () => {
     }
   };
 
-  const handlePrintCertificate = () => {
-    if (!certificateUrl) return;
-    window.open(certificateUrl, "_blank");
+  const handlePrintCertificate = async () => {
+    if (!previewRef.current) {
+      setCertError("Certificate preview is not ready to print.");
+      return;
+    }
+
+    try {
+      setCertError(null);
+      await printCertificatePreview(previewRef.current);
+    } catch (error) {
+      setCertError(
+        error instanceof Error
+          ? error.message
+          : "Unable to open the certificate print dialog.",
+      );
+    }
+  };
+
+  const handleLogoChange = (file: File | null) => {
+    setLogoFile(file);
+    setCertError(null);
+  };
+
+  const renderCertificatePreview = () => {
+    const isClassic = certConfig.theme === "classic";
+    const isModern = certConfig.theme === "modern";
+    const isTech = certConfig.theme === "tech";
+
+    return (
+      <div
+        ref={previewRef}
+        id="certificate-preview"
+        className={`bg-white w-[760px] min-h-[540px] shrink-0 shadow-2xl relative flex flex-col items-center text-center px-12 py-10 transition-all duration-300 ${
+          isClassic
+            ? "font-serif border-14 border-double border-amber-700/30"
+            : isModern
+              ? "font-sans border border-slate-200 border-t-18 border-t-brand-primary"
+              : "font-mono border border-slate-900 bg-slate-50"
+        }`}
+        style={{
+          backgroundImage: isClassic
+            ? "radial-gradient(circle at top, #fff9eb 0%, #ffffff 68%)"
+            : isTech
+              ? "linear-gradient(180deg, #f8fafc 0%, #ffffff 42%)"
+              : undefined,
+        }}
+      >
+        {isClassic && (
+          <>
+            <div className="absolute top-5 left-5 right-5 bottom-5 border border-amber-800/25 pointer-events-none" />
+            <div className="absolute top-8 left-8 w-10 h-10 border-t-2 border-l-2 border-amber-700/40" />
+            <div className="absolute top-8 right-8 w-10 h-10 border-t-2 border-r-2 border-amber-700/40" />
+            <div className="absolute bottom-8 left-8 w-10 h-10 border-b-2 border-l-2 border-amber-700/40" />
+            <div className="absolute bottom-8 right-8 w-10 h-10 border-b-2 border-r-2 border-amber-700/40" />
+          </>
+        )}
+
+        {isTech && (
+          <>
+            <div className="absolute top-0 left-0 right-0 h-14 bg-slate-900" />
+            <div className="absolute top-14 right-0 w-28 h-28 bg-slate-200/70" />
+          </>
+        )}
+
+        {isModern && (
+          <div className="absolute left-0 top-[18px] bottom-0 w-2 bg-brand-accent" />
+        )}
+
+        <div className={`mb-8 mt-4 relative z-10 ${isTech ? "pt-10" : ""}`}>
+          {activeLogoUrl ? (
+            <img
+              src={activeLogoUrl}
+              alt="Certificate logo"
+              className="mx-auto max-h-20 max-w-[220px] object-contain mb-5"
+            />
+          ) : (
+            <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full border-2 border-dashed border-gray-300 bg-white/80 text-gray-400">
+              <ImagePlus size={28} />
+            </div>
+          )}
+
+          <div
+            className={`text-[11px] uppercase tracking-[0.35em] mb-4 ${
+              isTech ? "text-slate-500" : "text-gray-400"
+            }`}
+          >
+            Prime Impact
+          </div>
+
+          <h1
+            className={`font-bold leading-tight ${
+              isClassic
+                ? "text-4xl text-gray-800 italic"
+                : isTech
+                  ? "text-3xl text-slate-900 uppercase tracking-tight"
+                  : "text-4xl text-brand-primary tracking-tight"
+            }`}
+          >
+            {certConfig.title}
+          </h1>
+        </div>
+
+        <div className="flex-1 w-full space-y-5 relative z-10">
+          <p className={`text-lg ${isTech ? "text-slate-600" : "text-gray-500"}`}>
+            This certifies that
+          </p>
+          <div
+            className={`text-3xl font-semibold w-2/3 mx-auto pb-2 ${
+              isClassic
+                ? "border-b-2 border-amber-700/30 text-gray-800"
+                : isTech
+                  ? "border-b border-slate-900 text-slate-900"
+                  : "border-b-2 border-brand-primary/30 text-gray-800"
+            }`}
+          >
+            Jane Doe
+          </div>
+          <p className={`${isTech ? "text-slate-600" : "text-gray-500"}`}>
+            has successfully completed the course requirements for
+          </p>
+          <p
+            className={`text-xl font-semibold ${
+              isClassic
+                ? "text-brand-primary"
+                : isTech
+                  ? "text-slate-900 uppercase tracking-wide"
+                  : "text-brand-primary-dark"
+            }`}
+          >
+            Advanced Leadership Program
+          </p>
+          {certConfig.showDate && (
+            <p className={`font-medium ${isTech ? "text-slate-700" : "text-gray-700"}`}>
+              {new Date().toLocaleDateString(undefined, {
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+              })}
+            </p>
+          )}
+        </div>
+
+        <div className="w-full flex justify-between items-end mt-8 px-4 relative z-10">
+          <div className="text-center">
+            <div
+              className={`text-xl mb-1 ${
+                isClassic
+                  ? "text-brand-primary italic"
+                  : isTech
+                    ? "font-bold text-slate-900"
+                    : "font-bold text-gray-800"
+              }`}
+              style={isClassic ? { fontFamily: "cursive" } : undefined}
+            >
+              {certConfig.signatory}
+            </div>
+            <div
+              className={`w-52 mx-auto border-t ${
+                isClassic ? "border-amber-700/40" : "border-gray-400"
+              }`}
+            />
+            <p className="text-xs text-gray-400 mt-2 uppercase tracking-[0.2em]">
+              {certConfig.signatoryRole}
+            </p>
+          </div>
+
+          <div className="opacity-90">
+            <Award
+              size={72}
+              className={
+                isClassic
+                  ? "text-amber-600"
+                  : isTech
+                    ? "text-slate-800"
+                    : "text-brand-primary"
+              }
+            />
+          </div>
+        </div>
+      </div>
+    );
   };
 
   /* =====================
@@ -161,7 +445,7 @@ const Rewards: React.FC = () => {
             Rewards & Recognition
           </h2>
           <p className="text-gray-500">
-            Design certificates and manage BICMAS Coin economy
+            Design certificates and manage Impact Coin economy
           </p>
         </div>
 
@@ -170,7 +454,7 @@ const Rewards: React.FC = () => {
             onClick={() => setActiveTab("CERTIFICATE")}
             className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium ${
               activeTab === "CERTIFICATE"
-                ? "bg-[#008080] text-white"
+                ? "bg-brand-primary text-white"
                 : "text-gray-600 hover:bg-gray-50"
             }`}
           >
@@ -181,11 +465,11 @@ const Rewards: React.FC = () => {
             onClick={() => setActiveTab("COINS")}
             className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium ${
               activeTab === "COINS"
-                ? "bg-[#004c4c] text-white"
+                ? "bg-brand-primary-dark text-white"
                 : "text-gray-600 hover:bg-gray-50"
             }`}
           >
-            <Coins size={16} /> BICMAS Coins
+            <Coins size={16} /> Impact Coins
           </button>
         </div>
       </div>
@@ -199,7 +483,7 @@ const Rewards: React.FC = () => {
           {/* Editor */}
           <div className="bg-white p-6 rounded-xl shadow-sm border h-fit">
             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <Edit3 size={18} className="text-blue-500" /> Template Configuration
+              <Edit3 size={18} className="text-brand-primary" /> Template Configuration
             </h3>
 
             <div className="space-y-4">
@@ -208,37 +492,51 @@ const Rewards: React.FC = () => {
                 <label className="text-sm font-medium mb-2 block">
                   Theme Style
                 </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {["classic", "modern", "tech"].map((theme) => (
+                <div className="space-y-2">
+                  {THEME_OPTIONS.map((theme) => (
                     <button
-                      key={theme}
+                      key={theme.id}
+                      type="button"
                       onClick={() =>
-                        setCertConfig({ ...certConfig, theme })
+                        setCertConfig({ ...certConfig, theme: theme.id })
                       }
-                      className={`py-2 text-xs font-medium border rounded-lg capitalize ${
-                        certConfig.theme === theme
-                          ? "border-blue-500 bg-blue-50 text-blue-700"
-                          : "border-gray-200 text-gray-600"
+                      className={`w-full text-left px-3 py-3 border rounded-lg transition-colors ${
+                        certConfig.theme === theme.id
+                          ? "border-brand-primary bg-brand-primary/10"
+                          : "border-gray-200 hover:border-brand-primary/40"
                       }`}
                     >
-                      {theme}
+                      <p
+                        className={`text-sm font-semibold capitalize ${
+                          certConfig.theme === theme.id
+                            ? "text-brand-primary"
+                            : "text-gray-800"
+                        }`}
+                      >
+                        {theme.label}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {theme.description}
+                      </p>
                     </button>
                   ))}
                 </div>
               </div>
 
               {/* Inputs */}
-              {[
-                ["Headline Text", "title"],
-                ["Signatory Name", "signatory"],
-                ["Signatory Role", "signatoryRole"],
-              ].map(([label, key]) => (
+              {(
+                [
+                  ["Headline Text", "title"],
+                  ["Signatory Name", "signatory"],
+                  ["Signatory Role", "signatoryRole"],
+                ] as const
+              ).map(([label, key]) => (
                 <div key={key}>
                   <label className="text-sm font-medium mb-1 block">
                     {label}
                   </label>
                   <input
-                    value={(certConfig as any)[key]}
+                    value={certConfig[key]}
                     onChange={(e) =>
                       setCertConfig({
                         ...certConfig,
@@ -252,21 +550,25 @@ const Rewards: React.FC = () => {
 
               <div>
                 <label className="text-sm font-medium mb-1 block">
-                  Template PDF
+                  Organization Logo
                 </label>
                 <input
                   type="file"
-                  accept="application/pdf,.pdf"
+                  accept="image/png,image/jpeg,image/jpg,image/webp,.png,.jpg,.jpeg,.webp"
                   onChange={(e) =>
-                    setTemplateFile(e.target.files?.[0] ?? null)
+                    handleLogoChange(e.target.files?.[0] ?? null)
                   }
                   className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
                 />
-                {templateFile && (
+                {logoFile && (
                   <p className="text-xs text-gray-500 mt-1">
-                    Selected: {templateFile.name}
+                    Selected: {logoFile.name}
                   </p>
                 )}
+                <p className="text-xs text-gray-500 mt-1">
+                  PNG, JPG, or WEBP. The logo appears at the top of every issued
+                  issued certificate.
+                </p>
               </div>
 
               <div>
@@ -372,20 +674,20 @@ const Rewards: React.FC = () => {
               <button
                 onClick={handleSaveCertificate}
                 disabled={certLoading}
-                className="w-full bg-[#008080] hover:bg-[#004c4c] text-white py-2 rounded-lg font-medium flex items-center justify-center gap-2 disabled:opacity-60"
+                className="w-full bg-brand-primary hover:bg-brand-primary-dark text-white py-2 rounded-lg font-medium flex items-center justify-center gap-2 disabled:opacity-60"
               >
                 {certLoading ? (
                   <Loader2 size={16} className="animate-spin" />
                 ) : (
                   <Save size={16} />
                 )}
-                {certLoading ? "Generating…" : "Save Template"}
+                {certLoading ? "Saving…" : "Save Template"}
               </button>
 
               <button
                 onClick={handleAssignTemplate}
                 disabled={assignLoading}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-medium flex items-center justify-center gap-2 disabled:opacity-60"
+                className="w-full bg-brand-primary hover:bg-brand-primary-dark text-white py-2 rounded-lg font-medium flex items-center justify-center gap-2 disabled:opacity-60"
               >
                 {assignLoading ? (
                   <Loader2 size={16} className="animate-spin" />
@@ -401,104 +703,25 @@ const Rewards: React.FC = () => {
           <div className="lg:col-span-2 space-y-4">
             <div className="flex justify-between items-center px-2">
               <h3 className="font-bold text-gray-600 text-sm">
-                Designer Preview (uses your inputs)
+                Live Certificate Preview
               </h3>
               <button
+                type="button"
                 onClick={handlePrintCertificate}
-                disabled={!certificateUrl}
-                className="text-blue-600 text-xs flex items-center gap-1 disabled:opacity-40"
+                className="text-brand-primary text-xs flex items-center gap-1 hover:text-brand-primary-dark"
               >
                 <Printer size={12} /> Test Print
               </button>
             </div>
 
-            {/* PREVIEW UI UNCHANGED */}
             <div className="bg-slate-800 p-8 rounded-xl shadow-inner flex justify-center items-center overflow-x-auto">
-              <div 
-                className={`bg-white w-[700px] h-[500px] shrink-0 shadow-2xl relative flex flex-col items-center text-center p-12 transition-all duration-300 ${
-                  certConfig.theme === 'classic' ? 'font-serif border-[12px] border-double border-gray-300' :
-                  certConfig.theme === 'modern' ? 'font-sans border-t-8 border-blue-600' :
-                  'font-mono border border-slate-900 bg-slate-50'
-                }`}
-                style={{
-                  backgroundImage: certConfig.theme === 'classic' ? 'radial-gradient(circle, #fffaeb 0%, #fff 100%)' : 'none'
-                }}
-              >
-                {/* Decor */}
-                {certConfig.theme === 'classic' && (
-                  <div className="absolute top-4 left-4 right-4 bottom-4 border border-gray-400 pointer-events-none"></div>
-                )}
-                {certConfig.theme === 'tech' && (
-                   <div className="absolute top-0 right-0 w-32 h-32 bg-slate-200/50 clip-path-polygon"></div>
-                )}
-
-                {/* Header */}
-                <div className="mb-12 mt-8">
-                  <div className="text-xs uppercase tracking-[0.2em] text-gray-400 mb-4">BICMAS Academy</div>
-                  <h1 className={`text-4xl font-bold ${
-                    certConfig.theme === 'classic' ? 'text-gray-800 italic' :
-                    certConfig.theme === 'tech' ? 'text-slate-900 uppercase tracking-tighter' :
-                    'text-blue-600'
-                  }`}>
-                    {certConfig.title}
-                  </h1>
-                </div>
-
-                {/* Content */}
-                <div className="flex-1 w-full space-y-6">
-                  <p className="text-gray-500 text-lg">This certifies that</p>
-                  <div className="text-3xl font-medium border-b border-gray-300 w-2/3 mx-auto pb-2 text-gray-800">
-                    Jane Doe
-                  </div>
-                  <p className="text-gray-500">
-                    has successfully completed the course requirements on
-                  </p>
-                  {certConfig.showDate && (
-                    <p className="font-medium text-gray-700">{new Date().toLocaleDateString()}</p>
-                  )}
-                </div>
-
-                {/* Footer */}
-                <div className="w-full flex justify-between items-end mt-12 px-8">
-                  <div className="text-center">
-                    <div className={`text-xl mb-1 ${certConfig.theme === 'classic' ? 'font-cursive text-blue-900' : 'font-bold'}`} style={{fontFamily: 'cursive'}}>
-                      {certConfig.signatory}
-                    </div>
-                    <div className="w-48 border-t border-gray-400"></div>
-                    <p className="text-xs text-gray-400 mt-1 uppercase tracking-wide">{certConfig.signatoryRole}</p>
-                  </div>
-                  <div className="opacity-80">
-                     <Award size={64} className={
-                       certConfig.theme === 'classic' ? 'text-yellow-500' :
-                       certConfig.theme === 'tech' ? 'text-slate-800' :
-                       'text-blue-500'
-                     }/>
-                  </div>
-                </div>
-              </div>
+              {renderCertificatePreview()}
             </div>
 
-            {certificateUrl && (
-              <div className="bg-white rounded-xl border shadow-sm p-3 space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-gray-500">
-                    Uploaded PDF Preview (original template file)
-                  </p>
-                  <button
-                    onClick={() => setShowUploadedPdfPreview((prev) => !prev)}
-                    className="text-xs text-blue-600 hover:text-blue-700"
-                  >
-                    {showUploadedPdfPreview ? "Hide" : "Show"}
-                  </button>
-                </div>
-
-                {showUploadedPdfPreview && (
-                  <iframe
-                    title="Certificate template preview"
-                    src={certificateUrl}
-                    className="w-full h-[420px] rounded border"
-                  />
-                )}
+            {savedLogoUrl && (
+              <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-700">
+                Certificate template saved. Logo and theme settings will be used
+                when HR managers issue certificates.
               </div>
             )}
           </div>
@@ -515,8 +738,19 @@ const Rewards: React.FC = () => {
             <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2">
               <Coins size={18} className="text-yellow-500" /> Economy Rules
             </h3>
+
+            {economyError && (
+              <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {economyError}
+              </div>
+            )}
+            {economySuccess && (
+              <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                {economySuccess}
+              </div>
+            )}
             
-            <div className="space-y-6">
+            <div className={`space-y-6 ${economyLoading ? "opacity-60 pointer-events-none" : ""}`}>
               <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100">
                 <div>
                   <h4 className="font-medium text-gray-800">Course Completion</h4>
@@ -582,16 +816,28 @@ const Rewards: React.FC = () => {
               </div>
             </div>
 
-            <button className="w-full mt-6 bg-[#008080] hover:bg-[#004c4c] text-white py-2 rounded-lg font-medium shadow-sm transition-colors flex items-center justify-center gap-2">
-               <RefreshCw size={16} /> Update Economy
+            <button
+              type="button"
+              onClick={handleUpdateEconomy}
+              disabled={economySaving || economyLoading}
+              className="w-full mt-6 bg-brand-primary hover:bg-brand-primary-dark disabled:opacity-60 text-white py-2 rounded-lg font-medium shadow-sm transition-colors flex items-center justify-center gap-2"
+            >
+              {economySaving ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <RefreshCw size={16} />
+              )}
+              {economySaving ? "Updating..." : "Update Economy"}
             </button>
           </div>
 
           <div className="space-y-6">
-            <div className="bg-gradient-to-br from-[#008080] to-[#004c4c] rounded-xl p-6 text-white shadow-lg relative overflow-hidden">
+            <div className="bg-linear-to-br from-brand-primary to-brand-primary-dark rounded-xl p-6 text-white shadow-lg relative overflow-hidden">
                <div className="absolute top-0 right-0 w-32 h-32 bg-white/20 rounded-full blur-2xl transform translate-x-10 -translate-y-10"></div>
-               <h3 className="text-xl font-bold mb-1">BICMAS Coin (B$)</h3>
-               <p className="text-yellow-100 text-sm mb-6">Total Circulating Supply: 1,240,500 B$</p>
+               <h3 className="text-xl font-bold mb-1">Impact Coin (B$)</h3>
+               <p className="text-yellow-100 text-sm mb-6">
+                 Total Circulating Supply: {totalCirculating.toLocaleString()} B$
+               </p>
                
                <div className="flex items-center gap-6">
                  <div className="w-20 h-20 bg-yellow-300 rounded-full border-4 border-yellow-200 shadow-inner flex items-center justify-center text-yellow-700 font-bold text-3xl shrink-0">
@@ -622,12 +868,8 @@ const Rewards: React.FC = () => {
               </div>
               
               <div className={`space-y-3 ${!coinRules.enableLeaderboard ? 'opacity-50 pointer-events-none grayscale' : ''}`}>
-                 {[
-                   { name: 'Sarah Connor', coins: 1250, rank: 1 },
-                   { name: 'Mike Smith', coins: 980, rank: 2 },
-                   { name: 'John Doe', coins: 850, rank: 3 },
-                 ].map((user) => (
-                   <div key={user.rank} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                 {(leaderboard.length > 0 ? leaderboard : []).map((user) => (
+                   <div key={user.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <div className="flex items-center gap-3">
                          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white ${
                            user.rank === 1 ? 'bg-yellow-400' : user.rank === 2 ? 'bg-gray-400' : 'bg-orange-400'
@@ -639,6 +881,11 @@ const Rewards: React.FC = () => {
                       <span className="font-bold text-gray-800">{user.coins} B$</span>
                    </div>
                  ))}
+                 {leaderboard.length === 0 && (
+                   <div className="rounded-lg bg-gray-50 p-4 text-center text-sm text-gray-500">
+                     No learners with Impact Coins yet.
+                   </div>
+                 )}
                  <div className="text-center text-xs text-gray-400 pt-2">
                     Top 3 Earners this Month
                  </div>

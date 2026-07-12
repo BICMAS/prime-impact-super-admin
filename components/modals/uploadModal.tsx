@@ -47,8 +47,8 @@ const UploadModal: React.FC<Props> = ({
 
         {/* Body */}
         <div className="p-6 space-y-5">
-          <div className="flex items-center gap-4 bg-blue-50 p-4 rounded-lg border border-blue-100">
-            <div className="bg-blue-100 p-3 rounded-lg text-blue-600">
+          <div className="flex items-center gap-4 bg-brand-primary/10 p-4 rounded-lg border border-brand-primary/20">
+            <div className="bg-brand-primary/10 p-3 rounded-lg text-brand-primary">
               <Box size={24} />
             </div>
             <div>
@@ -68,7 +68,7 @@ const UploadModal: React.FC<Props> = ({
             <input
               value={title}
               onChange={e => onTitleChange(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary outline-none"
             />
           </div>
 
@@ -79,7 +79,7 @@ const UploadModal: React.FC<Props> = ({
             <textarea
               value={description}
               onChange={e => onDescriptionChange(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg h-24 resize-none focus:ring-2 focus:ring-blue-500 outline-none"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg h-24 resize-none focus:ring-2 focus:ring-brand-primary outline-none"
             />
           </div>
         </div>
@@ -95,7 +95,7 @@ const UploadModal: React.FC<Props> = ({
           <button
             onClick={onConfirm}
             disabled={!title}
-            className="px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+            className="px-6 py-2 bg-brand-primary text-white font-medium rounded-lg hover:bg-brand-primary-dark disabled:opacity-50 flex items-center gap-2"
           >
             <Upload size={16} /> Save & Upload
           </button>

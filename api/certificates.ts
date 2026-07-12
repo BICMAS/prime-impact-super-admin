@@ -1,6 +1,17 @@
 import { getAccessToken } from '@/utils/auth';
+import { getApiV1BaseUrl } from '@/lib/apiConfig';
 
-const BASE_URL = 'https://bicmas-academy-main-backend-production.up.railway.app/api/v1';
+const BASE_URL = getApiV1BaseUrl();
+
+export type CertificateTheme = 'classic' | 'modern' | 'tech';
+
+export interface CertificateThemeConfig {
+  theme: CertificateTheme;
+  title: string;
+  signatory: string;
+  signatoryRole: string;
+  showDate: boolean;
+}
 
 export interface CreateCertificateTemplateResponse {
   url: string;
@@ -20,6 +31,13 @@ export interface AssignCertificateTemplateToHrResponse {
   templateId: string;
   orgId: string;
   hrManagerId: string;
+  reissuedCount?: number;
+  errors?: Array<{
+    certificateId: string;
+    userId: string;
+    courseId: string;
+    error: string;
+  }>;
 }
 
 function authHeader() {
@@ -40,23 +58,34 @@ async function readError(res: Response, fallback: string) {
   }
 }
 
-function assertPdfTemplate(file: File) {
-  const isPdfMime = file.type === 'application/pdf';
-  const isPdfName = file.name.toLowerCase().endsWith('.pdf');
+function assertLogoFile(file: File) {
+  const allowedMimeTypes = new Set([
+    'image/png',
+    'image/jpeg',
+    'image/jpg',
+    'image/webp',
+  ]);
+  const lowerName = file.name.toLowerCase();
+  const isAllowedMime = allowedMimeTypes.has(file.type);
+  const isAllowedExt = ['.png', '.jpg', '.jpeg', '.webp'].some((ext) =>
+    lowerName.endsWith(ext)
+  );
 
-  if (!isPdfMime && !isPdfName) {
-    throw new Error('Only PDF templates allowed');
+  if (!isAllowedMime && !isAllowedExt) {
+    throw new Error('Only PNG, JPG, or WEBP logo files are allowed');
   }
 }
 
 export async function createCertificateTemplate(
-  template: File,
+  logo: File,
+  themeConfig: CertificateThemeConfig,
   description?: string
 ): Promise<CreateCertificateTemplateResponse> {
-  assertPdfTemplate(template);
+  assertLogoFile(logo);
 
   const formData = new FormData();
-  formData.append('template', template);
+  formData.append('logo', logo);
+  formData.append('themeConfig', JSON.stringify(themeConfig));
   if (description) {
     formData.append('description', description);
   }
@@ -138,7 +167,7 @@ export function saveCertificateTemplateBlob(blob: Blob, filename: string) {
 }
 
 export async function downloadLatestCertificateTemplateToFile(
-  filename = 'latest-certificate-template.pdf'
+  filename = 'latest-certificate-logo.png'
 ) {
   const blob = await downloadLatestCertificateTemplate();
   saveCertificateTemplateBlob(blob, filename);
@@ -146,7 +175,7 @@ export async function downloadLatestCertificateTemplateToFile(
 
 export async function downloadCertificateTemplateByIdToFile(
   id: string,
-  filename = `certificate-template-${id}.pdf`
+  filename = `certificate-logo-${id}.png`
 ) {
   const blob = await downloadCertificateTemplateById(id);
   saveCertificateTemplateBlob(blob, filename);

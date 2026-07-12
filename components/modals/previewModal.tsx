@@ -22,7 +22,7 @@ const PreviewModal: React.FC<Props> = ({
         {/* Header */}
         <div className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center">
           <div className="flex items-center gap-4">
-            <div className="bg-blue-600 p-2 rounded-lg">
+            <div className="bg-brand-primary p-2 rounded-lg">
               <Box size={20} />
             </div>
             <div>
@@ -45,7 +45,7 @@ const PreviewModal: React.FC<Props> = ({
         {/* Body */}
         <div className="flex-1 flex items-center justify-center bg-gray-100">
           <div className="bg-white border border-gray-200 rounded-lg p-12 text-center shadow-lg">
-            <Play size={48} className="text-blue-600 mx-auto mb-4" />
+            <Play size={48} className="text-brand-primary mx-auto mb-4" />
             <h2 className="text-xl font-bold text-gray-800 mb-2">
               {lessonTitle}
             </h2>

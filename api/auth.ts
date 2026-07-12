@@ -1,8 +1,7 @@
-const BASE_URL =
-  'https://bicmas-academy-main-backend-production.up.railway.app/api/v1';
+import { getApiV1BaseUrl } from '@/lib/apiConfig';
 
 export async function login(email: string, password: string) {
-  const res = await fetch(`${BASE_URL}/auth/login`, {
+  const res = await fetch(`${getApiV1BaseUrl()}/auth/login`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -30,4 +29,3 @@ export function logout() {
   sessionStorage.clear();
   window.location.replace('/');
 }
-

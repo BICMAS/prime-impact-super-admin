@@ -1,7 +1,7 @@
 import { authFetch } from "./authFetch";
+import { getApiV1BaseUrl } from "@/lib/apiConfig";
 
-const API_BASE =
-  "https://bicmas-academy-main-backend-production.up.railway.app/api/v1";
+const API_BASE = getApiV1BaseUrl();
 
 export const fetchSuperDashboard = async () => {
   const res = await authFetch(`${API_BASE}/dashboard/super`);

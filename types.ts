@@ -9,7 +9,7 @@ export interface User {
   email: string;
   phoneNumber?: string;
   role: UserRole;
-  department: UserDepartment;
+  department: string;
   status: 'Active' | 'Inactive' | 'Blocked';
   lastLogin: string;
 }

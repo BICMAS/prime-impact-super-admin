@@ -54,15 +54,15 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     <div className="min-h-screen bg-black/90 flex items-center justify-center p-4 relative overflow-hidden">
       {/* Background Decor */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-[#008080]/20 rounded-full blur-[100px]"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-[#004c4c]/20 rounded-full blur-[100px]"></div>
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-brand-primary/20 rounded-full blur-[100px]"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-brand-primary-dark/20 rounded-full blur-[100px]"></div>
       </div>
 
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden relative z-10 flex flex-col md:flex-row">
         <div className="p-8 w-full">
           <div className="text-center mb-8">
-            <img src="/img/bicmas-logo.png" alt="BICMAS Academy Logo" className="mx-auto h-20 w-20 mb-4" />
-            <h1 className="text-2xl font-bold text-gray-800 tracking-tight">BICMAS Academy</h1>
+            <img src="/img/prime-impact-logo.png" alt="Prime Impact Logo" className="mx-auto h-24 mb-4 object-contain" />
+            <h1 className="text-2xl font-bold text-brand-primary tracking-tight">Prime Impact</h1>
             <p className="text-sm text-gray-500 mt-2">Super Admin Portal Access</p>
           </div>
 
@@ -82,8 +82,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   type="email" 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all outline-none"
-                  placeholder="admin@bicmas.edu"
+                  className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-primary focus:bg-white transition-all outline-none"
+                  placeholder="admin@primeimpact.com"
                   required
                 />
               </div>
@@ -97,7 +97,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   type="password" 
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all outline-none"
+                  className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-primary focus:bg-white transition-all outline-none"
                   placeholder="••••••••"
                   required
                 />
@@ -107,7 +107,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             <button 
               type="submit" 
               disabled={isLoading}
-              className="w-full bg-[#008080] hover:bg-[#004c4c] text-white font-semibold py-2.5 rounded-lg transition-all transform active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg shadow-[#008080]/30 disabled:opacity-70 disabled:cursor-not-allowed"
+              className="w-full bg-brand-accent hover:bg-brand-accent-dark text-white font-semibold py-2.5 rounded-lg transition-all transform active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg shadow-brand-accent/30 disabled:opacity-70 disabled:cursor-not-allowed"
             >
               {isLoading ? 'Signing in…' : 'Login'}
               {!isLoading && <ArrowRight size={18} />}
@@ -117,7 +117,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           <div className="mt-6 text-center">
             <button 
               onClick={() => setShowForgotModal(true)}
-              className="text-xs text-gray-400 hover:text-blue-600 transition-colors"
+              className="text-xs text-gray-400 hover:text-brand-primary transition-colors"
             >
               Forgot your password?
             </button>
@@ -151,7 +151,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                       type="email" 
                       value={resetEmail}
                       onChange={(e) => setResetEmail(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all outline-none"
+                      className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-primary focus:bg-white transition-all outline-none"
                       placeholder="you@company.com"
                       required
                     />
@@ -159,7 +159,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   <button 
                     type="submit" 
                     disabled={isResetting}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition-all disabled:opacity-70"
+                    className="w-full bg-brand-accent hover:bg-brand-accent-dark text-white font-semibold py-2.5 rounded-lg transition-all disabled:opacity-70"
                   >
                     {isResetting ? 'Sending...' : 'Send Reset Link'}
                   </button>

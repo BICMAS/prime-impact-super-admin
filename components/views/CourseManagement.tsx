@@ -26,6 +26,18 @@ import {
 } from "lucide-react";
 import { Course, Module, Lesson } from "../../types";
 import { generateCourseTags } from "../../services/geminiService";
+import { authFetch } from "../../services/authFetch";
+import { getApiV1BaseUrl } from "@/lib/apiConfig";
+
+const API_BASE = getApiV1BaseUrl();
+
+interface ScormUploadResponse {
+  id: string;
+  filename: string;
+  uploadedAt: string;
+  storagePath: string;
+  scormVersion: "SCORM_1.2" | "SCORM_2004";
+}
 
 const CourseManagement: React.FC = () => {
   const [courses, setCourses] = useState<Course[]>([]);
@@ -46,6 +58,7 @@ const CourseManagement: React.FC = () => {
     moduleId: string;
     lessonId: string;
   } | null>(null);
+  const [uploadingScorm, setUploadingScorm] = useState(false);
   const [uploadModal, setUploadModal] = useState<{
     isOpen: boolean;
     moduleId: string;
@@ -96,9 +109,7 @@ const CourseManagement: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      const res = await fetch(
-        "https://bicmas-academy-main-backend-production.up.railway.app/api/v1/courses",
-      );
+      const res = await authFetch(`${API_BASE}/courses`);
 
       if (!res.ok) {
         throw new Error("Failed to fetch courses");
@@ -125,7 +136,7 @@ const CourseManagement: React.FC = () => {
     }
 
     const res = await fetch(
-      "https://bicmas-academy-main-backend-production.up.railway.app/api/v1/courses/draft",
+      `${API_BASE}/courses/draft`,
       {
         method: "POST",
         headers: {
@@ -168,7 +179,7 @@ const CourseManagement: React.FC = () => {
     formData.append("package", file);
 
     const res = await fetch(
-      "https://bicmas-academy-main-backend-production.up.railway.app/api/v1/scorm-packages",
+      `${API_BASE}/scorm-packages`,
       {
         method: "POST",
         headers: {
@@ -178,13 +189,25 @@ const CourseManagement: React.FC = () => {
       },
     );
 
-    if (!res.ok) {
-      const text = await res.text();
-      console.error("SCORM upload backend error:", text);
-      throw new Error(text || "SCORM upload failed");
+    const text = await res.text();
+    let payload: { error?: string; message?: string } | null = null;
+    try {
+      payload = text ? JSON.parse(text) : null;
+    } catch {
+      payload = null;
     }
 
-    const json = await res.json();
+    if (!res.ok) {
+      const message =
+        payload?.error ||
+        payload?.message ||
+        text ||
+        "SCORM upload failed";
+      console.error("SCORM upload backend error:", message);
+      throw new Error(message);
+    }
+
+    const json = payload as { data: ScormUploadResponse };
     return json.data;
   };
 
@@ -196,7 +219,7 @@ const CourseManagement: React.FC = () => {
     formData.append("image", file);
 
     const res = await fetch(
-      `https://bicmas-academy-main-backend-production.up.railway.app/api/v1/courses/${courseId}/image`,
+      `${API_BASE}/courses/${courseId}/image`,
       {
         method: "POST",
         headers: {
@@ -225,7 +248,7 @@ const CourseManagement: React.FC = () => {
       visibility: course.visibility ?? null,
       version: course.version ?? null,
       status: "PUBLISHED",
-      modules: course.modules.map((module) => ({
+      modules: (course.modules ?? []).map((module) => ({
         id: module.id,
         name: module.name || "Untitled Module",
         lessons: module.lessons.map((lesson) => ({
@@ -248,7 +271,7 @@ const CourseManagement: React.FC = () => {
     const payload = buildCourseUpsertPayload(course);
 
     const res = await fetch(
-      `https://bicmas-academy-main-backend-production.up.railway.app/api/v1/courses/${course.id}`,
+      `${API_BASE}/courses/${course.id}`,
       {
         method: "PATCH",
         headers: {
@@ -349,7 +372,7 @@ const CourseManagement: React.FC = () => {
 
       updateCourseField(
         "modules",
-        activeCourse.modules.filter((m) => m.id !== moduleId),
+        (activeCourse.modules ?? []).filter((m) => m.id !== moduleId),
       );
     } catch (err) {
       console.error(err);
@@ -403,7 +426,7 @@ const CourseManagement: React.FC = () => {
     if (!token) throw new Error("No access token found");
 
     const res = await fetch(
-      `https://bicmas-academy-main-backend-production.up.railway.app/api/v1/courses/${courseId}`,
+      `${API_BASE}/courses/${courseId}`,
       {
         method: "DELETE",
         headers: {
@@ -422,7 +445,7 @@ const CourseManagement: React.FC = () => {
     if (!token) throw new Error("No access token found");
 
     const res = await fetch(
-      `https://bicmas-academy-main-backend-production.up.railway.app/api/v1/courses/${courseId}/modules/${moduleId}`,
+      `${API_BASE}/courses/${courseId}/modules/${moduleId}`,
       {
         method: "DELETE",
         headers: {
@@ -487,6 +510,7 @@ const CourseManagement: React.FC = () => {
     if (!uploadModal.file) return;
 
     try {
+      setUploadingScorm(true);
       const scorm = await uploadScormPackage(uploadModal.file);
       console.log("SCORM API response:", scorm); // 👈 raw payload
 
@@ -507,7 +531,13 @@ const CourseManagement: React.FC = () => {
       setUploadTrigger(null);
     } catch (err) {
       console.error(err);
-      alert("Failed to upload SCORM package");
+      alert(
+        err instanceof Error
+          ? err.message
+          : "Failed to upload SCORM package",
+      );
+    } finally {
+      setUploadingScorm(false);
     }
   };
 
@@ -551,7 +581,7 @@ const CourseManagement: React.FC = () => {
     if (!token) throw new Error("No access token found");
 
     const res = await fetch(
-      `https://bicmas-academy-main-backend-production.up.railway.app/api/v1/courses/${courseId}`,
+      `${API_BASE}/courses/${courseId}`,
       {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -588,14 +618,14 @@ const CourseManagement: React.FC = () => {
     return (
       <div className="space-y-6 animate-fade-in pb-20">
         {/* ===== SCORM PREVIEW MODAL ===== */}
-        {previewLesson && previewLesson.scormPackage && (
-          <div className="fixed inset-0 z-[200] bg-black/80 flex items-center justify-center">
+        {previewLesson?.content && (
+          <div className="fixed inset-0 z-200 bg-black/80 flex items-center justify-center">
             <div className="bg-white w-full h-full md:w-[90vw] md:h-[90vh] rounded-xl overflow-hidden flex flex-col">
               <div className="px-4 py-3 bg-slate-900 text-white flex justify-between items-center">
                 <div>
                   <p className="font-semibold">{previewLesson.title}</p>
                   <p className="text-xs text-slate-400">
-                    SCORM {previewLesson.scormPackage.scormVersion}
+                    SCORM {previewLesson.content.scormVersion}
                   </p>
                 </div>
                 <button
@@ -607,7 +637,7 @@ const CourseManagement: React.FC = () => {
               </div>
 
               <iframe
-                src={`https://bicmas-academy-main-backend-production.up.railway.app/api/v1/scorm-packages/${previewLesson.scormPackage.id}/launch`}
+                src={`${API_BASE}/scorm-packages/${previewLesson.content.id}/launch`}
                 className="flex-1 w-full border-none"
                 allow="fullscreen"
                 sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
@@ -646,13 +676,13 @@ const CourseManagement: React.FC = () => {
 
           <div className="bg-white p-5 rounded-xl border">
             <p className="text-xs text-gray-500 mb-1">Modules</p>
-            <p className="font-semibold">{activeCourse.modules.length}</p>
+            <p className="font-semibold">{(activeCourse.modules ?? []).length}</p>
           </div>
 
           <div className="bg-white p-5 rounded-xl border">
             <p className="text-xs text-gray-500 mb-1">Lessons</p>
             <p className="font-semibold">
-              {activeCourse.modules.reduce(
+              {(activeCourse.modules ?? []).reduce(
                 (sum, m) => sum + m.lessons.length,
                 0,
               )}
@@ -674,7 +704,7 @@ const CourseManagement: React.FC = () => {
             <Layers size={18} /> Curriculum
           </h3>
 
-          {activeCourse.modules.map((module, idx) => (
+          {(activeCourse.modules ?? []).map((module, idx) => (
             <div
               key={module.id}
               className="bg-white border rounded-xl overflow-hidden"
@@ -691,10 +721,10 @@ const CourseManagement: React.FC = () => {
                   >
                     <span className="text-gray-700">{lesson.title}</span>
 
-                    {lesson.scormPackage && (
+                    {lesson.content && (
                       <button
                         onClick={() => setPreviewLesson(lesson)}
-                        className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+                        className="text-xs text-brand-primary hover:underline flex items-center gap-1"
                       >
                         <Play size={12} /> Preview
                       </button>
@@ -731,7 +761,7 @@ const CourseManagement: React.FC = () => {
 
         {/* Upload Modal */}
         {uploadModal.isOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/50 backdrop-blur-sm">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-scale-in">
               <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                 <div>
@@ -753,8 +783,8 @@ const CourseManagement: React.FC = () => {
               </div>
 
               <div className="p-6 space-y-5">
-                <div className="flex items-center gap-4 bg-blue-50 p-4 rounded-lg border border-blue-100">
-                  <div className="bg-blue-100 p-3 rounded-lg text-blue-600">
+                <div className="flex items-center gap-4 bg-brand-primary/10 p-4 rounded-lg border border-brand-primary/20">
+                  <div className="bg-brand-primary/10 p-3 rounded-lg text-brand-primary">
                     <Box size={24} />
                   </div>
                   <div>
@@ -765,6 +795,11 @@ const CourseManagement: React.FC = () => {
                       {(uploadModal.file!.size / (1024 * 1024)).toFixed(2)} MB •
                       Ready to process
                     </p>
+                    {uploadModal.file!.size > 100 * 1024 * 1024 && (
+                      <p className="text-xs text-amber-700 mt-1">
+                        Large package — upload may take several minutes. Keep this tab open.
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -778,7 +813,7 @@ const CourseManagement: React.FC = () => {
                     onChange={(e) =>
                       setUploadModal({ ...uploadModal, title: e.target.value })
                     }
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary outline-none"
                     placeholder="Enter lesson title"
                   />
                 </div>
@@ -795,7 +830,7 @@ const CourseManagement: React.FC = () => {
                         description: e.target.value,
                       })
                     }
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none h-24 resize-none"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary outline-none h-24 resize-none"
                     placeholder="Describe what is covered in this module..."
                   />
                 </div>
@@ -812,11 +847,15 @@ const CourseManagement: React.FC = () => {
                 </button>
                 <button
                   onClick={confirmUpload}
-                  disabled={!uploadModal.title}
-                  className="px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  disabled={!uploadModal.title || uploadingScorm}
+                  className="px-6 py-2 bg-brand-primary text-white font-medium rounded-lg hover:bg-brand-primary-dark transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  <Upload size={18} />
-                  Upload
+                  {uploadingScorm ? (
+                    <Loader2 size={18} className="animate-spin" />
+                  ) : (
+                    <Upload size={18} />
+                  )}
+                  {uploadingScorm ? "Uploading…" : "Upload"}
                 </button>
               </div>
             </div>
@@ -872,7 +911,7 @@ const CourseManagement: React.FC = () => {
           <div className="col-span-12 lg:col-span-4 space-y-6">
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
               <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <FileBox size={18} className="text-blue-500" /> Course Details
+                <FileBox size={18} className="text-brand-primary" /> Course Details
               </h3>
 
               <div className="space-y-4">
@@ -885,7 +924,7 @@ const CourseManagement: React.FC = () => {
                     value={activeCourse.title || ""}
                     onChange={(e) => updateCourseField("title", e.target.value)}
                     placeholder="e.g. Fire Safety 101"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary outline-none"
                   />
                 </div>
 
@@ -899,7 +938,7 @@ const CourseManagement: React.FC = () => {
                       updateCourseField("description", e.target.value)
                     }
                     placeholder="Brief summary of the course..."
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none h-32 text-sm resize-none"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary outline-none h-32 text-sm resize-none"
                   />
                 </div>
 
@@ -948,7 +987,7 @@ const CourseManagement: React.FC = () => {
                     )}
 
                     {uploadingImage && (
-                      <p className="text-xs text-blue-600 mt-2">Uploading...</p>
+                      <p className="text-xs text-brand-primary mt-2">Uploading...</p>
                     )}
                   </div>
                 </div>
@@ -964,7 +1003,7 @@ const CourseManagement: React.FC = () => {
                       onChange={(e) =>
                         updateCourseField("version", e.target.value)
                       }
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary outline-none"
                     />
                   </div>
                   <div>
@@ -976,7 +1015,7 @@ const CourseManagement: React.FC = () => {
                       onChange={(e) =>
                         updateCourseField("visibility", e.target.value)
                       }
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary outline-none bg-white"
                     >
                       <option value="Internal">Internal</option>
                       <option value="External">External</option>
@@ -986,7 +1025,7 @@ const CourseManagement: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2 flex justify-between">
+                  <label className="text-sm font-medium text-gray-700 mb-2 flex justify-between">
                     <span>Tags</span>
                     <button
                       onClick={handleGenerateTags}
@@ -1036,12 +1075,12 @@ const CourseManagement: React.FC = () => {
           <div className="col-span-12 lg:col-span-8 space-y-6">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                <Layers size={18} className="text-blue-500" /> Curriculum
+                <Layers size={18} className="text-brand-primary" /> Curriculum
                 Builder
               </h3>
               <button
                 onClick={addModule}
-                className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 flex items-center gap-1 shadow-sm transition-colors"
+                className="text-sm bg-brand-primary text-white px-3 py-1.5 rounded-lg hover:bg-brand-primary-dark flex items-center gap-1 shadow-sm transition-colors"
               >
                 <Plus size={16} /> Add Module
               </button>
@@ -1056,7 +1095,7 @@ const CourseManagement: React.FC = () => {
                 </p>
                 <button
                   onClick={addModule}
-                  className="text-blue-600 font-medium hover:underline"
+                  className="text-brand-primary font-medium hover:underline"
                 >
                   Create first module
                 </button>
@@ -1072,7 +1111,7 @@ const CourseManagement: React.FC = () => {
                   {/* Module Header */}
                   <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between group">
                     <div className="flex items-center gap-3 flex-1">
-                      <span className="bg-blue-100 text-blue-700 text-xs font-bold w-6 h-6 rounded flex items-center justify-center">
+                      <span className="bg-brand-primary/10 text-brand-primary text-xs font-bold w-6 h-6 rounded flex items-center justify-center">
                         {mIdx + 1}
                       </span>
                       <input
@@ -1101,11 +1140,11 @@ const CourseManagement: React.FC = () => {
                     {module.lessons.map((lesson, lIdx) => (
                       <div
                         key={lesson.id}
-                        className="border border-gray-100 rounded-lg p-4 hover:border-blue-200 transition-all bg-white shadow-sm hover:shadow-md"
+                        className="border border-gray-100 rounded-lg p-4 hover:border-brand-primary/30 transition-all bg-white shadow-sm hover:shadow-md"
                       >
                         <div className="flex items-start gap-4">
                           <div className="mt-1">
-                            <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                            <div className="w-8 h-8 rounded-lg bg-brand-primary/10 text-brand-primary flex items-center justify-center">
                               <FileBox size={16} />
                             </div>
                           </div>
@@ -1120,7 +1159,7 @@ const CourseManagement: React.FC = () => {
                                     title: e.target.value,
                                   })
                                 }
-                                className="font-medium text-gray-800 border-b border-transparent focus:border-blue-300 focus:outline-none w-full max-w-md pb-0.5"
+                                className="font-medium text-gray-800 border-b border-transparent focus:border-brand-primary/30 focus:outline-none w-full max-w-md pb-0.5"
                                 placeholder="Lesson Title"
                               />
                               <button
@@ -1158,7 +1197,7 @@ const CourseManagement: React.FC = () => {
                                   description: e.target.value,
                                 })
                               }
-                              className="w-full text-sm text-gray-600 border border-transparent hover:border-gray-200 focus:border-blue-300 rounded p-1.5 focus:outline-none resize-none transition-colors"
+                              className="w-full text-sm text-gray-600 border border-transparent hover:border-gray-200 focus:border-brand-primary/30 rounded p-1.5 focus:outline-none resize-none transition-colors"
                               placeholder="Add lesson description..."
                               rows={2}
                             />
@@ -1167,7 +1206,7 @@ const CourseManagement: React.FC = () => {
                             {!lesson.content ? (
                               <div className="border-2 border-dashed border-gray-200 rounded-lg p-6 bg-gray-50/50 hover:bg-gray-50 transition-colors flex flex-col items-center justify-center text-center">
                                 <div className="bg-white p-2 rounded-full shadow-sm mb-3">
-                                  <Upload size={20} className="text-blue-500" />
+                                  <Upload size={20} className="text-brand-primary" />
                                 </div>
                                 <p className="text-sm font-medium text-gray-700 mb-1">
                                   Upload SCORM Package
@@ -1224,7 +1263,7 @@ const CourseManagement: React.FC = () => {
                     ))}
                     <button
                       onClick={() => addLesson(module.id)}
-                      className="w-full py-2.5 border border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50/50 transition-all flex items-center justify-center gap-2"
+                      className="w-full py-2.5 border border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:text-brand-primary hover:border-brand-primary/30 hover:bg-brand-primary/10/50 transition-all flex items-center justify-center gap-2"
                     >
                       <FolderPlus size={16} /> Add New Lesson
                     </button>
@@ -1243,7 +1282,7 @@ const CourseManagement: React.FC = () => {
     <div className="space-y-6">
       {/* Delete Confirmation Modal */}
       {deleteModal.isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-scale-in">
             <div className="p-6 text-center">
               <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1289,7 +1328,7 @@ const CourseManagement: React.FC = () => {
         <button
           onClick={initCreateCourse}
           disabled={creatingDraft}
-          className="bg-[#008080] hover:bg-[#004c4c] text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 shadow-sm transition-colors"
+          className="bg-brand-primary hover:bg-brand-primary-dark text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 shadow-sm transition-colors"
         >
           <Plus size={18} />
           {creatingDraft ? "Creating Course..." : "Create Course"}
@@ -1327,8 +1366,10 @@ const CourseManagement: React.FC = () => {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {loading && (
-              <tr colSpan={7} className="px-6 py-10 text-center text-gray-500">
-                <td>Loading courses...</td>
+              <tr>
+                <td colSpan={7} className="px-6 py-10 text-center text-gray-500">
+                  Loading courses...
+                </td>
               </tr>
             )}
 
@@ -1360,7 +1401,7 @@ const CourseManagement: React.FC = () => {
                 >
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="bg-blue-100 p-2 rounded text-blue-600">
+                      <div className="bg-brand-primary/10 p-2 rounded text-brand-primary">
                         <FileBox size={20} />
                       </div>
                       <div>
@@ -1442,7 +1483,7 @@ const CourseManagement: React.FC = () => {
                             setLoadingCourse(false);
                           }
                         }}
-                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                        className="p-1.5 text-gray-400 hover:text-brand-primary hover:bg-brand-primary/10 rounded transition-colors"
                         title="Edit Course"
                       >
                         <Edit2 size={16} />

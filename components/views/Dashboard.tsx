@@ -79,7 +79,7 @@ const Dashboard: React.FC = () => {
     analyzeSystemHealth({
       activeLearners: data.activeLearners,
       completionRate: `${data.completionRate}%`,
-      avgSession: `${data.averageSession}m`,
+      avgSession: `${data.averageSession ?? 0}m`,
     }).then(setAiInsight);
   }, [data]);
 
@@ -94,7 +94,7 @@ const Dashboard: React.FC = () => {
       ["Metric", "Value"],
       ["Active Learners", data.activeLearners],
       ["Completion Rate", `${data.completionRate}%`],
-      ["Average Session", `${data.averageSession}m`],
+      ["Average Session", `${data.averageSession ?? 0}m`],
       ["System Load", `${data.systemLoad.length}%`],
       [],
       ["Day", "Active Learners"],
@@ -170,7 +170,7 @@ const Dashboard: React.FC = () => {
           <div className="relative">
             <button
               onClick={() => setShowExport((v) => !v)}
-              className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-sm font-medium shadow-sm transition"
+              className="flex items-center gap-2 bg-brand-accent hover:bg-brand-accent-dark text-white px-4 py-2 rounded-xl text-sm font-medium shadow-sm transition"
             >
               <Download size={16} />
               Export
@@ -188,7 +188,7 @@ const Dashboard: React.FC = () => {
                   onClick={handleExportCSV}
                   className="w-full flex items-center gap-2 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50"
                 >
-                  <FileText size={16} className="text-teal-600" />
+                  <FileText size={16} className="text-brand-accent" />
                   Download CSV
                 </button>
                 <button
@@ -207,7 +207,7 @@ const Dashboard: React.FC = () => {
       {/* =====================
           AI Insight
       ===================== */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#008080] via-[#006666] to-[#003f3f] p-6 md:p-8 text-white shadow-lg">
+     {/*<div className="relative overflow-hidden rounded-2xl bg-linear-to-br from-brand-primary via-brand-primary-dark to-brand-primary-dark p-6 md:p-8 text-white shadow-lg">
         <div className="absolute -top-20 -right-20 opacity-10">
           <Sparkles size={260} />
         </div>
@@ -218,7 +218,7 @@ const Dashboard: React.FC = () => {
           </div>
 
           <div>
-            <p className="text-xs uppercase tracking-wider text-teal-200 font-semibold">
+            <p className="text-xs uppercase tracking-wider text-purple-200 font-semibold">
               AI System Insight
             </p>
             <p className="text-lg md:text-xl font-medium leading-relaxed mt-1">
@@ -226,7 +226,7 @@ const Dashboard: React.FC = () => {
             </p>
           </div>
         </div>
-      </div>
+      </div>*/}
 
       {/* =====================
           Stats
@@ -244,7 +244,7 @@ const Dashboard: React.FC = () => {
         />
         <Stat
           label="Avg Session"
-          value={`${data.averageSession}m`}
+          value={`${data.averageSession ?? 0}m`}
           icon={<Clock />}
         />
         <Stat
@@ -345,7 +345,7 @@ const Stat = ({
   <div className="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm hover:shadow-md transition">
     <div className="flex items-center justify-between mb-4">
       <span className="text-sm font-medium text-slate-500">{label}</span>
-      <div className="p-2 rounded-lg bg-teal-50 text-teal-600">{icon}</div>
+      <div className="p-2 rounded-lg bg-brand-primary/10 text-brand-primary">{icon}</div>
     </div>
     <div className="text-3xl font-bold text-slate-900">{value}</div>
   </div>

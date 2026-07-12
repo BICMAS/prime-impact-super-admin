@@ -3,8 +3,28 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>BICMAS Academy - Super Admin</title>
+    <meta name="theme-color" content="#4f1073" />
+    <title>Prime Impact - Super Admin</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              'brand-primary': {
+                DEFAULT: '#4f1073',
+                dark: '#3d0c5a',
+                light: '#6b1a99',
+              },
+              'brand-accent': {
+                DEFAULT: '#55a526',
+                dark: '#448c20',
+              },
+            },
+          },
+        },
+      };
+    </script>
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
       body {

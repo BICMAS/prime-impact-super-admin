@@ -10,13 +10,13 @@ import {
 import { Course } from "../../types";
 import { suggestLearningPathDescription } from "../../services/geminiService";
 import { authFetch } from "../../services/authFetch";
+import { getApiV1BaseUrl } from "@/lib/apiConfig";
 
 /* =====================
    API
 ===================== */
 
-const API_BASE =
-  "https://bicmas-academy-main-backend-production.up.railway.app/api/v1";
+const API_BASE = getApiV1BaseUrl();
 
 /* =====================
    Types
@@ -250,7 +250,7 @@ const LearningPaths: React.FC = () => {
         <button
           onClick={handleSavePath}
           disabled={saving}
-          className="bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2"
+          className="bg-brand-primary hover:bg-brand-primary-dark disabled:opacity-60 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2"
         >
           <Save size={18} />
           {saving ? "Saving…" : "Save Path"}
@@ -351,7 +351,7 @@ const LearningPaths: React.FC = () => {
             <input
               type="text"
               placeholder="Filter courses..."
-              className="mt-2 w-full px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-md text-sm outline-none focus:border-blue-500"
+              className="mt-2 w-full px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-md text-sm outline-none focus:border-brand-primary"
             />
           </div>
 
@@ -386,7 +386,7 @@ const LearningPaths: React.FC = () => {
                       <button
                         onClick={() => addCourse(course)}
                         disabled={alreadyAdded}
-                        className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded font-medium hover:bg-blue-100 disabled:opacity-40"
+                        className="text-xs bg-brand-primary/10 text-brand-primary px-2 py-1 rounded font-medium hover:bg-brand-primary/10 disabled:opacity-40"
                       >
                         {alreadyAdded ? "Added" : "Add"}
                       </button>

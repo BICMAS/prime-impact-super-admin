@@ -19,7 +19,49 @@ import {
   FileSpreadsheet,
 } from "lucide-react";
 import { User, UserRole } from "../../types";
-import { createUser, updateUser, bulkUploadUsers, getUsers } from "@/api/users";
+import { createUser, updateUser, bulkUploadUsers, getUsers, blockUser, unblockUser, deleteUser } from "@/api/users";
+
+function formatDepartment(value: unknown): string {
+  if (!value) return "—";
+  return String(value)
+    .split("_")
+    .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function formatLastLogin(value: unknown): string {
+  if (!value) return "Never";
+  const date = new Date(String(value));
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
+function getLastLoginValue(u: Record<string, unknown>): unknown {
+  if (u.lastLoginAt) return u.lastLoginAt;
+  if (u.lastLogin) return u.lastLogin;
+  const metadata = u.metadata;
+  if (metadata && typeof metadata === "object" && !Array.isArray(metadata)) {
+    return (metadata as Record<string, unknown>).lastLoginAt;
+  }
+  return null;
+}
+
+function normalizeUser(u: Record<string, unknown>): User {
+  const status = u.status as string | undefined;
+  return {
+    id: String(u.id),
+    name: String(u.fullName ?? u.name ?? ""),
+    email: String(u.email ?? ""),
+    phoneNumber: u.phoneNumber ? String(u.phoneNumber) : undefined,
+    role: (u.userRole ?? u.role ?? "LEARNER") as UserRole,
+    department: formatDepartment(u.department),
+    status: status === "BLOCKED" || status === "Blocked" ? "Blocked" : "Active",
+    lastLogin: formatLastLogin(getLastLoginValue(u)),
+  };
+}
 
 const UserManagement: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -55,8 +97,8 @@ const UserManagement: React.FC = () => {
   const filteredUsers = users.filter((user) => {
     const matchesRole = filterRole === "ALL" || user.role === filterRole;
     const matchesSearch =
-      user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchQuery.toLowerCase());
+      (user.name ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (user.email ?? "").toLowerCase().includes(searchQuery.toLowerCase());
     return matchesRole && matchesSearch;
   });
 
@@ -70,7 +112,7 @@ const UserManagement: React.FC = () => {
         );
       case "HR_MANAGER":
         return (
-          <span className="px-2 py-1 text-xs font-semibold bg-blue-100 text-blue-700 rounded-full border border-blue-200 w-fit">
+          <span className="px-2 py-1 text-xs font-semibold bg-brand-primary/10 text-brand-primary rounded-full border border-brand-primary/20 w-fit">
             HR Admin
           </span>
         );
@@ -93,25 +135,7 @@ const fetchUsers = async () => {
     setError(null);
 
     const data = await getUsers();
-
-    const normalized: User[] = data.map((u: any) => ({
-      id: u.id,
-      name: u.fullName,                 
-      email: u.email,
-      role: u.userRole,                 
-      department: u.department ?? "—",
-      status: u.status === "BLOCKED" ? "Blocked" : "Active",
-      lastLogin: "—",
-    }));
-
-    console.log(
-      data.map((u: any) => ({
-        id: u.id,
-        userRole: u.userRole,
-      }))
-    )
-
-    setUsers(normalized);
+    setUsers(data.map((u) => normalizeUser(u as unknown as Record<string, unknown>)));
   } catch (err: any) {
     setError(err.message);
   } finally {
@@ -139,10 +163,11 @@ const fetchUsers = async () => {
     setEditingUser(user);
     setFormData({
       name: user.name,
-      emailOrPhone: user.email || user.phoneNumber || "",
-      password: "", // Don't populate password
+      email: user.email,
+      phoneNumber: user.phoneNumber || "",
+      password: "",
       role: user.role,
-      department: user.department,
+      department: user.department === "—" ? "" : user.department,
     });
     setIsModalOpen(true);
   };
@@ -151,18 +176,29 @@ const fetchUsers = async () => {
     setDeleteModal({ isOpen: true, userId });
   };
 
-  const confirmDeleteUser = () => {
-    if (deleteModal.userId) {
-      setUsers(users.filter((u) => u.id !== deleteModal.userId));
+  const confirmDeleteUser = async () => {
+    if (!deleteModal.userId) return;
+
+    try {
+      await deleteUser(deleteModal.userId);
       setDeleteModal({ isOpen: false, userId: null });
+      await fetchUsers();
+    } catch (err: any) {
+      alert(err.message || "Failed to delete user");
     }
   };
 
-  const handleToggleBlock = (user: User) => {
-    const newStatus = user.status === "Blocked" ? "Active" : "Blocked";
-    setUsers(
-      users.map((u) => (u.id === user.id ? { ...u, status: newStatus } : u))
-    );
+  const handleToggleBlock = async (user: User) => {
+    try {
+      if (user.status === "Blocked") {
+        await unblockUser(user.id);
+      } else {
+        await blockUser(user.id);
+      }
+      await fetchUsers();
+    } catch (err: any) {
+      alert(err.message || "Failed to update user status");
+    }
   };
 
   const handleSaveUser = async (e: React.FormEvent) => {
@@ -179,22 +215,29 @@ const fetchUsers = async () => {
 
     try {
       if (editingUser) {
-        const updated = await updateUser(editingUser.id, {
-          name: formData.name,
+        const payload: Record<string, string> = {
+          fullName: formData.name,
           email: formData.email,
-          phoneNumber: formData.phoneNumber || undefined,
-          role: formData.role,
-          department: formData.department,
-        });
+          userRole: formData.role,
+        };
 
-        setUsers(users.map((u) => (u.id === updated.id ? updated : u)));
+        if (formData.phoneNumber) {
+          payload.phoneNumber = formData.phoneNumber;
+        }
+
+        const department = formData.department.trim().toUpperCase();
+        if (department && department !== "—") {
+          payload.department = department;
+        }
+
+        await updateUser(editingUser.id, payload);
       } else {
         const created = await createUser({
           fullName: formData.name,
           email: formData.email,
           password: formData.password,
           userRole: formData.role,
-          department: formData.department,
+          department: formData.department.trim().toUpperCase(),
           phoneNumber: formData.phoneNumber || undefined,
         });
       }
@@ -241,7 +284,7 @@ const fetchUsers = async () => {
           </button>
           <button
             onClick={handleOpenCreate}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 shadow-sm transition-colors"
+            className="bg-brand-primary hover:bg-brand-primary-dark text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 shadow-sm transition-colors"
           >
             <UserPlus size={18} />
             Add User
@@ -258,14 +301,14 @@ const fetchUsers = async () => {
           <input
             type="text"
             placeholder="Search users..."
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary outline-none"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
         <div className="flex gap-2 w-full md:w-auto">
           <select
-            className="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-500 cursor-pointer"
+            className="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-brand-primary cursor-pointer"
             value={filterRole}
             onChange={(e) => setFilterRole(e.target.value as any)}
           >
@@ -324,7 +367,7 @@ const fetchUsers = async () => {
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-medium">
-                        {user.name.charAt(0)}
+                        {(user.name || "?").charAt(0)}
                       </div>
                       <div>
                         <p className="font-medium text-gray-900">{user.name}</p>
@@ -367,7 +410,7 @@ const fetchUsers = async () => {
                     <div className="flex items-center justify-end gap-2">
                       <button
                         onClick={() => handleOpenEdit(user)}
-                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                        className="p-1.5 text-gray-400 hover:text-brand-primary hover:bg-brand-primary/10 rounded transition-colors"
                         title="Edit User"
                       >
                         <Edit2 size={16} />
@@ -393,8 +436,13 @@ const fetchUsers = async () => {
                       </button>
                       <button
                         onClick={() => initiateDeleteUser(user.id)}
-                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                        title="Delete User"
+                        disabled={user.role === "SUPER_ADMIN"}
+                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-gray-400"
+                        title={
+                          user.role === "SUPER_ADMIN"
+                            ? "Super admin accounts cannot be deleted"
+                            : "Delete User"
+                        }
                       >
                         <Trash2 size={16} />
                       </button>
@@ -415,7 +463,7 @@ const fetchUsers = async () => {
 
       {/* Delete Confirmation Modal */}
       {deleteModal.isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-scale-in">
             <div className="p-6 text-center">
               <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -451,7 +499,7 @@ const fetchUsers = async () => {
 
       {/* Import Modal */}
       {isImportModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-in">
             <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
               <h3 className="text-lg font-bold text-gray-800">
@@ -466,22 +514,22 @@ const fetchUsers = async () => {
             </div>
 
             <div className="p-6 space-y-6">
-              <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 flex gap-3 items-start">
-                <div className="bg-blue-100 p-2 rounded text-blue-600 shrink-0">
+              <div className="bg-brand-primary/10 border border-brand-primary/20 rounded-lg p-4 flex gap-3 items-start">
+                <div className="bg-brand-primary/10 p-2 rounded text-brand-primary shrink-0">
                   <FileSpreadsheet size={20} />
                 </div>
                 <div>
-                  <h4 className="font-bold text-sm text-blue-900">
+                  <h4 className="font-bold text-sm text-brand-primary">
                     CSV Format Required
                   </h4>
-                  <p className="text-xs text-blue-800 mt-1">
+                  <p className="text-xs text-brand-primary-dark mt-1">
                     Your CSV must include the following columns in order:
                     <br />
-                    <code className="bg-blue-100 px-1 rounded text-blue-900 font-mono">
+                    <code className="bg-brand-primary/10 px-1 rounded text-brand-primary font-mono">
                       Name, Email, Role, Department
                     </code>
                   </p>
-                  <p className="text-xs text-blue-600 mt-2 italic">
+                  <p className="text-xs text-brand-primary mt-2 italic">
                     Example: John Doe, john@example.com, TRAINEE, Sales
                   </p>
                 </div>
@@ -522,7 +570,7 @@ const fetchUsers = async () => {
 
       {/* User Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-in">
             <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
               <h3 className="text-lg font-bold text-gray-800">
@@ -552,7 +600,7 @@ const fetchUsers = async () => {
                     onChange={(e) =>
                       setFormData({ ...formData, name: e.target.value })
                     }
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary outline-none"
                     placeholder="Jane Doe"
                     required
                   />
@@ -575,7 +623,7 @@ const fetchUsers = async () => {
                       setFormData({ ...formData, email: e.target.value })
                     }
                     placeholder="email@example.com"
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary outline-none"
                     required
                   />
                 </div>
@@ -597,7 +645,7 @@ const fetchUsers = async () => {
                       setFormData({ ...formData, phoneNumber: e.target.value })
                     }
                     placeholder="123-456-7890"
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary outline-none"
                     required
                   />
                 </div>
@@ -619,7 +667,7 @@ const fetchUsers = async () => {
                       onChange={(e) =>
                         setFormData({ ...formData, password: e.target.value })
                       }
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary outline-none"
                       placeholder="••••••••"
                       required={!editingUser}
                     />
@@ -641,7 +689,7 @@ const fetchUsers = async () => {
                         role: e.target.value as UserRole,
                       })
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary outline-none bg-white"
                     required
                   >
                     <option value="LEARNER">Trainee</option>
@@ -660,7 +708,7 @@ const fetchUsers = async () => {
                     onChange={(e) =>
                       setFormData({ ...formData, department: e.target.value })
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary outline-none"
                     placeholder="Operations"
                     required
                   />
@@ -677,7 +725,7 @@ const fetchUsers = async () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-2"
+                  className="px-6 py-2 bg-brand-primary text-white font-medium rounded-lg hover:bg-brand-primary-dark transition-colors shadow-sm flex items-center gap-2"
                 >
                   <Save size={18} />{" "}
                   {editingUser ? "Update User" : "Create User"}

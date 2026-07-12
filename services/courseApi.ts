@@ -1,9 +1,9 @@
 import { authJson, authUpload } from "@/lib/authHelpers";
 import { authFetch } from "./authFetch";
 import { Course, ScormPackage } from "@/types";
+import { getApiV1BaseUrl } from "@/lib/apiConfig";
 
-const BASE_URL =
-  "https://bicmas-academy-main-backend-production.up.railway.app/api/v1";
+const BASE_URL = getApiV1BaseUrl();
 
 /* =========================
    CREATE

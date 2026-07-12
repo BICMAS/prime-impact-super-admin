@@ -32,7 +32,7 @@ const CourseDetailsPanel: React.FC<Props> = ({ course, onUpdate }) => {
     <div className="col-span-12 lg:col-span-4 space-y-6">
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
         <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-          <FileBox size={18} className="text-blue-500" />
+          <FileBox size={18} className="text-brand-primary" />
           Course Details
         </h3>
 
@@ -47,7 +47,7 @@ const CourseDetailsPanel: React.FC<Props> = ({ course, onUpdate }) => {
               value={course.title}
               onChange={e => onUpdate('title', e.target.value)}
               placeholder="e.g. Fire Safety 101"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary outline-none"
             />
           </div>
 
@@ -60,7 +60,7 @@ const CourseDetailsPanel: React.FC<Props> = ({ course, onUpdate }) => {
               value={course.description || ''}
               onChange={e => onUpdate('description', e.target.value)}
               placeholder="Brief summary of the course..."
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none h-32 text-sm resize-none"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary outline-none h-32 text-sm resize-none"
             />
           </div>
 
@@ -74,7 +74,7 @@ const CourseDetailsPanel: React.FC<Props> = ({ course, onUpdate }) => {
                 type="text"
                 value={course.version}
                 onChange={e => onUpdate('version', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary outline-none"
               />
             </div>
 
@@ -90,7 +90,7 @@ const CourseDetailsPanel: React.FC<Props> = ({ course, onUpdate }) => {
                     e.target.value as Course['visibility']
                   )
                 }
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary outline-none bg-white"
               >
                 <option value="Internal">Internal</option>
                 <option value="External">External</option>
