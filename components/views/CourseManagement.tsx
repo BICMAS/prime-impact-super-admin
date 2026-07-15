@@ -102,6 +102,12 @@ const CourseManagement: React.FC = () => {
     tags: Array.isArray(course.tags) ? course.tags : [],
     modules: Array.isArray(course.modules) ? course.modules : [],
     imageUrl: course.imageUrl || undefined,
+    passingScore: (course as any).passingScore ?? 70,
+    requireQuizPass: (course as any).requireQuizPass ?? true,
+    modulePacingEnabled: (course as any).modulePacingEnabled ?? false,
+    modulePacingDays: (course as any).modulePacingDays ?? 7,
+    pacingStartDate: (course as any).pacingStartDate ?? null,
+    scormPackageId: (course as any).scormPackageId ?? null,
   });
 
   const fetchCourses = async () => {
@@ -248,6 +254,12 @@ const CourseManagement: React.FC = () => {
       visibility: course.visibility ?? null,
       version: course.version ?? null,
       status: "PUBLISHED",
+      passingScore: (course as any).passingScore ?? 70,
+      requireQuizPass: (course as any).requireQuizPass ?? true,
+      modulePacingEnabled: (course as any).modulePacingEnabled ?? false,
+      modulePacingDays: (course as any).modulePacingDays ?? 7,
+      pacingStartDate: (course as any).pacingStartDate ?? null,
+      scormPackageId: (course as any).scormPackageId ?? null,
       modules: (course.modules ?? []).map((module) => ({
         id: module.id,
         name: module.name || "Untitled Module",
@@ -990,6 +1002,106 @@ const CourseManagement: React.FC = () => {
                       <p className="text-xs text-brand-primary mt-2">Uploading...</p>
                     )}
                   </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Quiz Passing Score (%)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={(activeCourse as any).passingScore ?? 70}
+                      onChange={(e) =>
+                        updateCourseField(
+                          "passingScore" as keyof Course,
+                          Number(e.target.value),
+                        )
+                      }
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary outline-none"
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <label className="flex items-center gap-2 text-sm text-gray-700 pb-2">
+                      <input
+                        type="checkbox"
+                        checked={(activeCourse as any).requireQuizPass ?? true}
+                        onChange={(e) =>
+                          updateCourseField(
+                            "requireQuizPass" as keyof Course,
+                            e.target.checked,
+                          )
+                        }
+                      />
+                      Require quiz pass to complete
+                    </label>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-gray-200 p-4 space-y-4">
+                  <h3 className="text-sm font-semibold text-gray-800">
+                    Weekly module pacing (one SCORM zip)
+                  </h3>
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={(activeCourse as any).modulePacingEnabled ?? false}
+                      onChange={(e) =>
+                        updateCourseField(
+                          "modulePacingEnabled" as keyof Course,
+                          e.target.checked,
+                        )
+                      }
+                    />
+                    Enable fixed cohort calendar pacing
+                  </label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Cohort start date (Week 1 unlocks)
+                      </label>
+                      <input
+                        type="date"
+                        value={
+                          (activeCourse as any).pacingStartDate
+                            ? String((activeCourse as any).pacingStartDate).slice(0, 10)
+                            : ""
+                        }
+                        onChange={(e) =>
+                          updateCourseField(
+                            "pacingStartDate" as keyof Course,
+                            e.target.value ? `${e.target.value}T00:00:00.000Z` : null,
+                          )
+                        }
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Days between module unlocks
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={365}
+                        value={(activeCourse as any).modulePacingDays ?? 7}
+                        onChange={(e) =>
+                          updateCourseField(
+                            "modulePacingDays" as keyof Course,
+                            Number(e.target.value),
+                          )
+                        }
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary outline-none"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    All trainees share the same unlock dates. Module N unlocks on
+                    cohort start + (N − 1) × interval days. Completing a prior
+                    module is not required for the next to unlock.
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">

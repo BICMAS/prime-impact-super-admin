@@ -52,6 +52,12 @@ export interface Course {
   completionRate?: number;
   modules?: Module[];
   imageUrl?: string;
+  passingScore?: number;
+  requireQuizPass?: boolean;
+  modulePacingEnabled?: boolean;
+  modulePacingDays?: number;
+  pacingStartDate?: string | null;
+  scormPackageId?: string | null;
 }
 
 // draftTypes.ts
